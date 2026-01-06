@@ -21,6 +21,11 @@
 [Ppis]
 
 [Protocols]
+  gEfiLoadedImageProtocolGuid
+  gEfiShellProtocolGuid
+  gEfiShellParametersProtocolGuid
+  gEfiPartitionInfoProtocolGuid
+  gEfiDevicePathProtocolGuid
 
 [FeaturePcd]
 
