@@ -13,6 +13,8 @@ mkdir BootPartuuid
 vim BootPartuuid/BootPartuuid.inf
 vim BootPartuuid/UefiMain.c
 
+add to MdeModulePkg/MdeModulePkg.dsc
+
 build -a X86 -t GCC5 -p MdeModulePkg/MdeModulePkg.dsc
 
 sudo modprobe nbd max_part=8
