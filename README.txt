@@ -1,6 +1,5 @@
 https://wiki.osdev.org/EDK2
-
-built without platforms, made hello world
+built without platforms
 
 git clone https://github.com/tianocore/edk2.git
 cd edk2

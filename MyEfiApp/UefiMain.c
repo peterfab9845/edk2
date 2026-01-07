@@ -1,9 +1,8 @@
 #include <Uefi.h>
+#include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/UefiBootServicesTableLib.h>
-#include <Protocol/LoadedImage.h>
-#include <Protocol/Shell.h>
+#include <Library/DevicePathLib.h>
 #include <Protocol/ShellParameters.h>
 #include <Protocol/PartitionInfo.h>
 
@@ -15,53 +14,11 @@ EFI_STATUS EFIAPI UefiEntry(IN EFI_HANDLE imgHandle, IN EFI_SYSTEM_TABLE *sysTab
 
     EFI_STATUS Status;
 
-    // get the parent shell
-    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
-    EFI_SHELL_PROTOCOL *Shell;
-
-    Status = gBS->OpenProtocol(
-            gImageHandle,
-            &gEfiLoadedImageProtocolGuid,
-            (VOID **) &LoadedImage,
-            gImageHandle,
-            NULL,
-            EFI_OPEN_PROTOCOL_GET_PROTOCOL
-            );
-    if (EFI_ERROR (Status)) {
-        Print(L"Failed to get loaded image protocol\r\n");
-        return Status;
-    }
-    if (LoadedImage->ParentHandle != NULL) {
-        Status = gBS->OpenProtocol(
-                LoadedImage->ParentHandle,
-                &gEfiShellProtocolGuid,
-                (VOID **) &Shell,
-                gImageHandle,
-                NULL,
-                EFI_OPEN_PROTOCOL_GET_PROTOCOL
-                );
-        if (EFI_ERROR (Status)) {
-            // ignore it, will search for the protocol
-        }
-    }
-
-    if (Shell == NULL) {
-        // didn't get it from the parent, search everywhere
-        Status = gBS->LocateProtocol(
-                &gEfiShellProtocolGuid,
-                NULL,
-                (VOID **) &Shell
-                );
-        if (EFI_ERROR (Status)) {
-            Print(L"Failed to get shell protocol\r\n");
-            return Status;
-        }
-    }
-
     // get the shell parameters
     EFI_SHELL_PARAMETERS_PROTOCOL *ShellParameters;
-    CONST CHAR16 *TargetGuidString;//[] = L"10FA6F54-79A5-4185-BC0A-618692606103";
+    CONST CHAR16 *TargetGuidString;
     EFI_GUID TargetGuid;
+    CHAR16 *TargetPathString;
 
     Status = gBS->OpenProtocol(
             gImageHandle,
@@ -76,11 +33,12 @@ EFI_STATUS EFIAPI UefiEntry(IN EFI_HANDLE imgHandle, IN EFI_SYSTEM_TABLE *sysTab
         return Status;
     }
 
-    if (ShellParameters->Argc != 2) {
-        Print(L"Takes 1 argument of target GUID\r\n");
+    if (ShellParameters->Argc != 3) {
+        Print(L"Usage: MyEfiApp.efi <target PARTUUID> <target path>\r\n");
         return EFI_SUCCESS;
     }
     TargetGuidString = ShellParameters->Argv[1];
+    TargetPathString = ShellParameters->Argv[2];
 
     Status = StrToGuid(TargetGuidString, &TargetGuid);
     if (EFI_ERROR (Status)) {
@@ -129,51 +87,38 @@ EFI_STATUS EFIAPI UefiEntry(IN EFI_HANDLE imgHandle, IN EFI_SYSTEM_TABLE *sysTab
             if (CompareGuid(&PartitionGuid, &TargetGuid)) {
                 //Print(L"Found it!\r\n");
 
-                // cd to the located partition
-                EFI_DEVICE_PATH_PROTOCOL *DevicePath;
-                CONST CHAR16 *DeviceMapping;
-                CONST CHAR16 *LastMap;
-
-                Status = gBS->OpenProtocol(
+                // load and execute the target image from the located device
+                EFI_DEVICE_PATH_PROTOCOL *TargetDevicePath;
+                TargetDevicePath = FileDevicePath(
                         HandleBuffer[HandleIndex],
-                        &gEfiDevicePathProtocolGuid,
-                        (VOID **) &DevicePath,
+                        TargetPathString
+                        );
+
+                EFI_HANDLE TargetImage;
+                Status = gBS->LoadImage(
+                        TRUE,
                         gImageHandle,
+                        TargetDevicePath,
                         NULL,
-                        EFI_OPEN_PROTOCOL_GET_PROTOCOL
+                        0,
+                        &TargetImage
                         );
                 if (EFI_ERROR (Status)) {
-                    Print(L"Failed to get device path\r\n");
+                    Print(L"Failed to load image at %s\r\n", TargetPathString);
                     return Status;
                 }
 
-                DeviceMapping = Shell->GetMapFromDevicePath(
-                        &DevicePath
-                        );
-                if (DeviceMapping == NULL) {
-                    Print(L"Failed to get device mapping\r\n");
-                    return EFI_UNSUPPORTED;
-                }
-                Print(L"Found device mapping: %s\r\n", DeviceMapping);
-
-                LastMap = DeviceMapping;
-                while (*DeviceMapping) {
-                    if (*DeviceMapping++ == L';') {
-                        LastMap = DeviceMapping;
-                    }
-                }
-                Print(L"Last component: %s\r\n", LastMap);
-
-                Status = Shell->SetCurDir(
-                        NULL,
-                        LastMap
+                Status = gBS->StartImage(
+                        TargetImage,
+                        0,
+                        NULL
                         );
                 if (EFI_ERROR (Status)) {
-                    Print(L"Failed to cd to %s\r\n", LastMap);
+                    Print(L"Failed to start image\r\n");
                     return Status;
                 }
 
-                // don't do anything else
+                // shouldn't get here, either we start the image or failed
                 return EFI_SUCCESS;
             }
         }
