@@ -34,7 +34,7 @@ EFI_STATUS EFIAPI UefiEntry(IN EFI_HANDLE imgHandle, IN EFI_SYSTEM_TABLE *sysTab
     }
 
     if (ShellParameters->Argc != 3) {
-        Print(L"Usage: MyEfiApp.efi <target PARTUUID> <target path>\r\n");
+        Print(L"Usage: BootPartuuid.efi <target PARTUUID> <target path>\r\n");
         return EFI_SUCCESS;
     }
     TargetGuidString = ShellParameters->Argv[1];
